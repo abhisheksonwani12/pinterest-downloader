@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PinDrop — Minimal Pinterest Artifact Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090a0f;
+      --surface: #12141c;
+      --surface-elevated: #1a1e29;
+      --surface-hover: #222736;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(230, 0, 35, 0.5);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --brand: #e60023;
+      --brand-glow: rgba(230, 0, 35, 0.25);
+      --brand-hover: #ff1a3c;
+      --user-bubble: #1f2433;
+      --bot-bubble: #12141c;
+      --success: #10b981;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient background glow */
+    body::before {
+      content: "";
+      position: fixed;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 350px;
+      background: radial-gradient(circle, var(--brand-glow) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+    }
+
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 16px 24px;
+      background: rgba(9, 10, 15, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      background: var(--brand);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px var(--brand-glow);
+    }
+
+    .brand-icon svg {
+      width: 18px;
+      height: 18px;
+      fill: white;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--success);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.9); }
+    }
+
+    .history-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .history-btn:hover {
+      background: var(--surface-hover);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    /* Chat messages container */
+    main {
+      flex: 1;
+      position: relative;
+      z-index: 1;
+      overflow-y: auto;
+      padding: 24px;
+      scroll-behavior: smooth;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-inner {
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding-bottom: 30px;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 88%;
+      animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message.bot {
+      align-self: flex-start;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .avatar svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--text-muted);
+    }
+
+    .message.bot .avatar {
+      background: var(--brand);
+      border-color: transparent;
+      box-shadow: 0 0 10px var(--brand-glow);
+    }
+
+    .message.bot .avatar svg {
+      fill: white;
+    }
+
+    .bubble {
+      padding: 12px 18px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .message.user .bubble {
+      background: var(--user-bubble);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.bot .bubble {
+      background: var(--bot-bubble);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Artifact Preview Card */
+    .artifact-card {
+      margin-top: 12px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .media-container {
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-height: 380px;
+      overflow: hidden;
+    }
+
+    .media-container img,
+    .media-container video {
+      width: 100%;
+      max-height: 380px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .artifact-info {
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .artifact-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .artifact-name {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-main);
+    }
+
+    .artifact-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .artifact-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--brand);
+      color: white;
+      text-decoration: none;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .btn-download:hover {
+      background: var(--brand-hover);
+    }
+
+    .btn-open {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      text-decoration: none;
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-open:hover {
+      background: var(--surface-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Loading Bubble */
+    .loading-bubble {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error Bubble */
+    .error-bubble {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.1) !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+    }
+
+    /* Suggestion Chips */
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chip:hover {
+      background: var(--surface-hover);
+      color: var(--text-main);
+      border-color: var(--brand-glow);
+    }
+
+    /* Footer & Chat Input */
+    footer {
+      position: relative;
+      z-index: 10;
+      padding: 16px 24px 20px;
+      background: rgba(9, 10, 15, 0.85);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrapper {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .chat-form {
+      position: relative;
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 6px 8px 6px 16px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .chat-form:focus-within {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px var(--brand-glow);
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .chat-input::placeholder {
+      color: #6b7280;
+    }
+
+    .send-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--brand);
+      border: none;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(:disabled) {
+      background: var(--brand-hover);
+      transform: scale(1.04);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .send-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .input-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 8px;
+    }
+
+    /* History Drawer / Modal */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: -380px;
+      width: 380px;
+      max-width: 90vw;
+      height: 100%;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      z-index: 101;
+      display: flex;
+      flex-direction: column;
+      transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .drawer.open {
+      right: 0;
+    }
+
+    .drawer-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .drawer-title {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px;
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .history-card {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      transition: border-color 0.2s;
+    }
+
+    .history-card:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .history-meta {
+      min-width: 0;
+    }
+
+    .history-name {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-main);
+    }
+
+    .history-size {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="/" class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">PinDrop</div>
+        <div class="brand-subtitle">Minimal Pinterest Downloader</div>
+      </div>
+    </a>
+
+    <div class="header-actions">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        Ready
+      </div>
+      <button class="history-btn" id="history-toggle" aria-label="Open download history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Saved (<span id="saved-count">0</span>)
+      </button>
+    </div>
+  </header>
+
+  <main id="chat-container">
+    <div class="chat-inner" id="messages-list">
+      <!-- Bot Intro Message -->
+      <div class="message bot">
+        <div class="avatar">
+          <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z"/></svg>
+        </div>
+        <div class="bubble">
+          <p>Hey there! 👋</p>
+          <p style="margin-top: 4px;">Paste any <strong>Pinterest Pin</strong>, <strong>Video</strong>, or <strong>Board</strong> link below to download the original uncompressed artifact.</p>
+          <div class="suggestions">
+            <button class="chip" data-link="https://pin.it/Gk3NpJ8K0">📌 Try: Video Pin</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="input-wrapper">
+      <form class="chat-form" id="chat-form">
+        <label for="chat-input" class="visually-hidden">Pinterest URL</label>
+        <input 
+          id="chat-input" 
+          class="chat-input" 
+          type="text" 
+          placeholder="Paste Pinterest link here (e.g. https://pin.it/...)" 
+          autocomplete="off" 
+          required
+        />
+        <button type="submit" class="send-btn" id="send-button" aria-label="Send URL">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </form>
+      <div class="input-hint">Press Enter to send • Downloads save to <code>Downloaded_Pins/</code></div>
+    </div>
+  </footer>
+
+  <!-- History Drawer -->
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title">Downloaded Pins</div>
+      <button class="close-btn" id="drawer-close" aria-label="Close drawer">&times;</button>
+    </div>
+    <div class="drawer-body" id="history-list">
+      <!-- Injected dynamically -->
+    </div>
+  </aside>
+
+  <script>
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-button');
+    const messagesList = document.getElementById('messages-list');
+    const chatContainer = document.getElementById('chat-container');
+    const historyToggle = document.getElementById('history-toggle');
+    const drawer = document.getElementById('drawer');
+    const drawerOverlay = document.getElementById('drawer-overlay');
+    const drawerClose = document.getElementById('drawer-close');
+    const historyList = document.getElementById('history-list');
+    const savedCount = document.getElementById('saved-count');
+
+    // IME-safe enter-to-submit per Modern Web Guidance
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        // If user is composing with IME (Japanese/Chinese/Korean) or Safari keyCode 229, prevent premature submit
+        if (event.isComposing || event.keyCode === 229) {
+          return;
+        }
+        form.requestSubmit();
+      }
+    });
+
+    function scrollToBottom() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function appendUserMessage(text) {
+      const msg = document.createElement('div');
+      msg.className = 'message user';
+      msg.innerHTML = `
+        <div class="bubble">${escapeHtml(text)}</div>
+      `;
+      messagesList.appendChild(msg);
+      scrollToBottom();
+    }
+
+    function appendLoadingMessage() {
+      const msg = document.createElement('div');
+      msg.className = 'message bot';
+      msg.id = 'loading-msg';
+      msg.innerHTML = `
+        <div class="avatar">
+          <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z"/></svg>
+        </div>
+        <div class="bubble loading-bubble">
+          <div class="spinner"></div>
+          <span>Fetching original artifact from Pinterest...</span>
+        </div>
+      `;
+      messagesList.appendChild(msg);
+      scrollToBottom();
+      return msg;
+    }
+
+    function appendBotResponse(data) {
+      const loading = document.getElementById('loading-msg');
+      if (loading) loading.remove();
+
+      const msg = document.createElement('div');
+      msg.className = 'message bot';
+
+      if (!data.success) {
+        msg.innerHTML = `
+          <div class="avatar">
+            <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z"/></svg>
+          </div>
+          <div class="bubble error-bubble">
+            <strong>Download failed:</strong> ${escapeHtml(data.error || 'Could not fetch this pin.')}
+          </div>
+        `;
+        messagesList.appendChild(msg);
+        scrollToBottom();
+        return;
+      }
+
+      let artifactsHtml = '';
+      data.files.forEach(file => {
+        let previewTag = '';
+        if (file.media_type === 'video') {
+          previewTag = `<video src="${file.url}" controls playsinline preload="metadata"></video>`;
+        } else if (file.media_type === 'image') {
+          previewTag = `<img src="${file.url}" alt="${file.name}" loading="lazy" />`;
+        } else {
+          previewTag = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">📄 ${file.name}</div>`;
+        }
+
+        artifactsHtml += `
+          <div class="artifact-card">
+            <div class="media-container">
+              ${previewTag}
+            </div>
+            <div class="artifact-info">
+              <div class="artifact-meta">
+                <span class="artifact-name">${file.name}</span>
+                <span class="artifact-sub">${file.size} • ${file.media_type.toUpperCase()}</span>
+              </div>
+              <div class="artifact-actions">
+                <a href="${file.url}" download="${file.name}" class="btn-download">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>
+                  Save
+                </a>
+                <a href="${file.url}" target="_blank" class="btn-open">Open</a>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      msg.innerHTML = `
+        <div class="avatar">
+          <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z"/></svg>
+        </div>
+        <div class="bubble">
+          <p>${escapeHtml(data.message)}</p>
+          ${artifactsHtml}
+        </div>
+      `;
+
+      messagesList.appendChild(msg);
+      scrollToBottom();
+      refreshHistory();
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = input.value.trim();
+      if (!url) return;
+
+      appendUserMessage(url);
+      input.value = '';
+      sendBtn.disabled = true;
+
+      appendLoadingMessage();
+
+      try {
+        const resp = await fetch('/api/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          appendBotResponse({ success: false, error: data.detail || 'Download request failed' });
+        } else {
+          appendBotResponse(data);
+        }
+      } catch (err) {
+        appendBotResponse({ success: false, error: err.message });
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    });
+
+    // Handle suggestion chips
+    document.addEventListener('click', (e) => {
+      if (e.target.matches('.chip')) {
+        const link = e.target.getAttribute('data-link');
+        if (link) {
+          input.value = link;
+          form.requestSubmit();
+        }
+      }
+    });
+
+    // History Drawer handlers
+    async function refreshHistory() {
+      try {
+        const res = await fetch('/api/history');
+        const items = await res.json();
+        savedCount.textContent = items.length;
+
+        if (items.length === 0) {
+          historyList.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No downloads yet.</div>';
+          return;
+        }
+
+        historyList.innerHTML = items.map(item => `
+          <div class="history-card">
+            <div class="history-meta">
+              <div class="history-name">${item.name}</div>
+              <div class="history-size">${item.size} • ${item.media_type.toUpperCase()}</div>
+            </div>
+            <a href="${item.url}" download="${item.name}" class="btn-download" style="padding: 4px 8px; font-size: 11px;">Save</a>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Failed to fetch history', e);
+      }
+    }
+
+    function toggleDrawer(open) {
+      if (open) {
+        drawer.classList.add('open');
+        drawerOverlay.classList.add('open');
+        refreshHistory();
+      } else {
+        drawer.classList.remove('open');
+        drawerOverlay.classList.remove('open');
+      }
+    }
+
+    historyToggle.addEventListener('click', () => toggleDrawer(true));
+    drawerClose.addEventListener('click', () => toggleDrawer(false));
+    drawerOverlay.addEventListener('click', () => toggleDrawer(false));
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[m]));
+    }
+
+    // Initial load
+    refreshHistory();
+  </script>
+</body>
+</html>
