@@ -241,7 +241,8 @@ async function extractInstagramArtifact(url: string) {
     };
 
     if (process.env.INSTAGRAM_COOKIE) {
-      headers["Cookie"] = process.env.INSTAGRAM_COOKIE;
+      const rawCookie = process.env.INSTAGRAM_COOKIE.trim();
+      headers["Cookie"] = rawCookie.includes("sessionid=") ? rawCookie : `sessionid=${rawCookie};`;
     }
 
     const res = await fetch(apiUrl, { headers });
