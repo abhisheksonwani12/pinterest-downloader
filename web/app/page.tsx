@@ -25,7 +25,7 @@ export default function Home() {
       id: "intro",
       role: "bot",
       content:
-        "Hey! 👋 Paste any Pinterest link (single pin, video, or board) below, and I'll fetch and download the original high-resolution artifact for you.",
+        "Hey! 👋 Paste any Pinterest link (pin, video, board) or Instagram link (Reel, Post, Share link) below, and I'll fetch the original artifact for you.",
     },
   ]);
   const [inputUrl, setInputUrl] = useState("");
@@ -153,7 +153,7 @@ export default function Home() {
           </div>
           <div>
             <h1 className="text-sm font-bold tracking-tight">PinDrop</h1>
-            <p className="text-[11px] text-gray-400">Next.js Pinterest Artifact Downloader</p>
+            <p className="text-[11px] text-gray-400">Media Downloader (Pinterest & Instagram)</p>
           </div>
         </div>
 
@@ -202,7 +202,7 @@ export default function Home() {
                 {msg.loading ? (
                   <div className="flex items-center gap-2.5 text-gray-400">
                     <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-[#e60023] rounded-full animate-spin" />
-                    <span>Fetching original artifact from Pinterest...</span>
+                    <span>Fetching original artifact...</span>
                   </div>
                 ) : (
                   <>
@@ -214,7 +214,13 @@ export default function Home() {
                           onClick={() => handleDownload("https://pin.it/Gk3NpJ8K0")}
                           className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-gray-300 transition cursor-pointer"
                         >
-                          📌 Try: Video Pin
+                          📌 Try: Pinterest Video
+                        </button>
+                        <button
+                          onClick={() => handleDownload("https://www.instagram.com/reel/C8_c89bMu0v/")}
+                          className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-gray-300 transition cursor-pointer"
+                        >
+                          📸 Try: Instagram Reel
                         </button>
                       </div>
                     )}
@@ -309,7 +315,7 @@ export default function Home() {
             className="flex items-center gap-2 bg-[#12141c] border border-white/10 focus-within:border-[#e60023] focus-within:ring-2 focus-within:ring-[#e60023]/25 rounded-2xl px-3 py-1.5 transition"
           >
             <label htmlFor="pinterest-url-input" className="sr-only">
-              Pinterest URL
+              Media URL
             </label>
             <input
               ref={inputRef}
@@ -318,7 +324,7 @@ export default function Home() {
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Paste Pinterest link here (e.g. https://pin.it/...)"
+              placeholder="Paste Pinterest (pin.it) or Instagram (reel/post) link..."
               className="flex-1 bg-transparent border-none outline-none text-sm text-gray-100 placeholder:text-gray-500 px-2 py-1.5"
               autoComplete="off"
               disabled={isLoading}

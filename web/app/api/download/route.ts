@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
 import path from "path";
+
+const execFileAsync = promisify(execFile);
+const DOWNLOAD_DIR = path.resolve(process.cwd(), "..", "Downloaded_Pins");
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -9,13 +15,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
-/**
- * Resolves short links (pin.it) and extracts the numeric Pin ID.
- */
-async function resolvePinId(inputUrl: string): Promise<string | null> {
-  let url = inputUrl.trim();
+// ---------------------------------------------------------
+// PINTEREST EXTRACTION
+// ---------------------------------------------------------
 
-  // Handle pin.it short links
+async function resolvePinterestPinId(inputUrl: string): Promise<string | null> {
+  let url = inputUrl.trim();
   if (url.includes("pin.it")) {
     try {
       const res = await fetch(url, {
@@ -28,7 +33,6 @@ async function resolvePinId(inputUrl: string): Promise<string | null> {
       });
       url = res.url;
     } catch {
-      // If HEAD fails, try GET
       try {
         const res = await fetch(url, { redirect: "follow" });
         url = res.url;
@@ -40,9 +44,6 @@ async function resolvePinId(inputUrl: string): Promise<string | null> {
   return match ? match[1] : null;
 }
 
-/**
- * Probes candidate video URLs for Pinterest video hashes.
- */
 async function resolveVideoUrl(hash: string): Promise<string | null> {
   const suffixes = ["_720w.mp4", "_t4.mp4", ".mp4", "_mobile.mp4"];
   for (const s of suffixes) {
@@ -57,12 +58,8 @@ async function resolveVideoUrl(hash: string): Promise<string | null> {
   return null;
 }
 
-/**
- * Robust Pinterest Artifact Extractor.
- * Targets the authentic pin artifact without ever scraping arbitrary page assets.
- */
 async function extractPinterestArtifact(pinId: string) {
-  // Strategy 1: PinResource internal API (Provides high-res originals and video hashes)
+  // Strategy 1: PinResource internal API
   try {
     const csrf = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
     const data = JSON.stringify({ options: { id: pinId, field_set_key: "detailed" } });
@@ -90,7 +87,6 @@ async function extractPinterestArtifact(pinId: string) {
       const pinData = json.resource_response?.data;
 
       if (pinData) {
-        // 1. Check for Video in story_pin_data
         if (pinData.story_pin_data?.pages) {
           for (const page of pinData.story_pin_data.pages) {
             for (const block of page.blocks || []) {
@@ -123,7 +119,6 @@ async function extractPinterestArtifact(pinId: string) {
           }
         }
 
-        // 2. Check for Video in standard videos object
         if (pinData.videos?.video_list) {
           for (const item of Object.values(pinData.videos.video_list) as any[]) {
             if (item.url && item.url.endsWith(".mp4")) {
@@ -136,7 +131,6 @@ async function extractPinterestArtifact(pinId: string) {
           }
         }
 
-        // 3. Check for Original Image
         if (pinData.images?.orig?.url) {
           const imgUrl = pinData.images.orig.url;
           const ext = path.extname(new URL(imgUrl).pathname) || ".jpg";
@@ -152,7 +146,7 @@ async function extractPinterestArtifact(pinId: string) {
     console.warn("PinResource error:", err.message);
   }
 
-  // Strategy 2: Official Pinterest oEmbed (100% reliable image fallback)
+  // Strategy 2: Official Pinterest oEmbed
   try {
     const oembedUrl = `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(
       `https://www.pinterest.com/pin/${pinId}/`
@@ -161,7 +155,6 @@ async function extractPinterestArtifact(pinId: string) {
     if (oembedRes.ok) {
       const oembed = await oembedRes.json();
       if (oembed.thumbnail_url) {
-        // Upgrade thumbnail to uncompressed original image
         const origUrl = oembed.thumbnail_url.replace(/\/(\d+x|\d+x\d+)\//, "/originals/");
         const ext = path.extname(new URL(origUrl).pathname) || ".jpg";
         return {
@@ -178,6 +171,111 @@ async function extractPinterestArtifact(pinId: string) {
   return null;
 }
 
+// ---------------------------------------------------------
+// INSTAGRAM EXTRACTION
+// ---------------------------------------------------------
+
+const IG_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+function shortcodeToMediaId(shortcode: string): string {
+  let id = BigInt(0);
+  for (let i = 0; i < shortcode.length; i++) {
+    const val = BigInt(IG_ALPHABET.indexOf(shortcode[i]));
+    id = id * BigInt(64) + val;
+  }
+  return id.toString();
+}
+
+function parseInstagramShortcode(url: string): string | null {
+  const shareMatch = url.match(/\/share\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/i);
+  if (shareMatch) return shareMatch[1];
+  const match = url.match(/\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/i);
+  return match ? match[1] : null;
+}
+
+async function extractInstagramArtifact(url: string) {
+  const shortcode = parseInstagramShortcode(url);
+  if (!shortcode) {
+    throw new Error("Could not parse Instagram shortcode from URL.");
+  }
+
+  // 1. Check if local CLI tool (yt-dlp or gallery-dl) is installed on host
+  const tools = [
+    "/opt/homebrew/bin/yt-dlp",
+    "/usr/local/bin/yt-dlp",
+    "/Library/Frameworks/Python.framework/Versions/3.14/bin/yt-dlp",
+    "yt-dlp",
+  ];
+
+  for (const bin of tools) {
+    try {
+      if (fs.existsSync(/*turbopackIgnore: true*/ bin) || bin === "yt-dlp") {
+        const { stdout } = await execFileAsync(bin, ["--dump-single-json", "--no-warnings", url], {
+          timeout: 20000,
+        });
+        const info = JSON.parse(stdout);
+        const directUrl = info.url || info.requested_formats?.[0]?.url;
+        if (directUrl) {
+          return {
+            name: `instagram_${shortcode}.mp4`,
+            url: directUrl,
+            mediaType: (info.ext === "mp4" || !info.ext ? "video" : "image") as "video" | "image",
+          };
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Direct Instagram Web API
+  try {
+    const mediaId = shortcodeToMediaId(shortcode);
+    const apiUrl = `https://www.instagram.com/api/v1/media/${mediaId}/info/`;
+    const headers: Record<string, string> = {
+      Accept: "*/*",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "X-IG-App-ID": "936619743392459",
+      "X-ASBD-ID": "129477",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: "https://www.instagram.com/",
+    };
+
+    if (process.env.INSTAGRAM_COOKIE) {
+      headers["Cookie"] = process.env.INSTAGRAM_COOKIE;
+    }
+
+    const res = await fetch(apiUrl, { headers });
+    if (res.ok) {
+      const json = await res.json();
+      const item = json.items?.[0];
+      if (item) {
+        if (item.video_versions && item.video_versions.length > 0) {
+          return {
+            name: `instagram_${shortcode}.mp4`,
+            url: item.video_versions[0].url,
+            mediaType: "video" as const,
+          };
+        }
+        if (item.image_versions2?.candidates && item.image_versions2.candidates.length > 0) {
+          return {
+            name: `instagram_${shortcode}.jpg`,
+            url: item.image_versions2.candidates[0].url,
+            mediaType: "image" as const,
+          };
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("Instagram direct API error:", err.message);
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------
+// POST HANDLER
+// ---------------------------------------------------------
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -187,56 +285,99 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "URL is required" }, { status: 400 });
     }
 
-    if (!/(pinterest\.[a-z.]+|pin\.it)/i.test(url)) {
+    const isPinterest = /(pinterest\.[a-z.]+|pin\.it)/i.test(url);
+    const isInstagram = /(instagram\.com|instagr\.am)/i.test(url);
+
+    if (!isPinterest && !isInstagram) {
       return NextResponse.json(
-        { success: false, error: "Please enter a valid Pinterest pin link." },
+        { success: false, error: "Please enter a valid Pinterest or Instagram link." },
         { status: 400 }
       );
     }
 
-    const pinId = await resolvePinId(url);
-    if (!pinId) {
-      return NextResponse.json(
-        { success: false, error: "Could not find a valid Pin ID in this link." },
-        { status: 400 }
-      );
-    }
-
-    const artifact = await extractPinterestArtifact(pinId);
-    if (!artifact) {
-      return NextResponse.json(
-        { success: false, error: "Could not retrieve media for this Pin. It might be private or deleted." },
-        { status: 404 }
-      );
-    }
-
-    // Get exact file size via HEAD
-    let sizeStr = "High Quality";
-    try {
-      const head = await fetch(artifact.url, { method: "HEAD" });
-      const len = head.headers.get("content-length");
-      if (len) {
-        sizeStr = formatBytes(parseInt(len, 10));
+    // 1. Handle Pinterest
+    if (isPinterest) {
+      const pinId = await resolvePinterestPinId(url);
+      if (!pinId) {
+        return NextResponse.json(
+          { success: false, error: "Could not find a valid Pin ID in this link." },
+          { status: 400 }
+        );
       }
-    } catch {}
 
-    const proxyDownloadUrl = `/api/proxy?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(
-      artifact.name
-    )}`;
+      const artifact = await extractPinterestArtifact(pinId);
+      if (!artifact) {
+        return NextResponse.json(
+          { success: false, error: "Could not retrieve media for this Pin. It might be private or deleted." },
+          { status: 404 }
+        );
+      }
 
-    return NextResponse.json({
-      success: true,
-      message: `Successfully retrieved ${artifact.mediaType === "video" ? "video" : "image"}!`,
-      files: [
-        {
-          name: artifact.name,
-          url: artifact.url,
-          downloadUrl: proxyDownloadUrl,
-          size: sizeStr,
-          mediaType: artifact.mediaType,
-        },
-      ],
-    });
+      let sizeStr = "High Quality";
+      try {
+        const head = await fetch(artifact.url, { method: "HEAD" });
+        const len = head.headers.get("content-length");
+        if (len) sizeStr = formatBytes(parseInt(len, 10));
+      } catch {}
+
+      const proxyDownloadUrl = `/api/proxy?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(
+        artifact.name
+      )}`;
+
+      return NextResponse.json({
+        success: true,
+        message: `Successfully retrieved Pinterest ${artifact.mediaType}!`,
+        files: [
+          {
+            name: artifact.name,
+            url: artifact.url,
+            downloadUrl: proxyDownloadUrl,
+            size: sizeStr,
+            mediaType: artifact.mediaType,
+          },
+        ],
+      });
+    }
+
+    // 2. Handle Instagram
+    if (isInstagram) {
+      const artifact = await extractInstagramArtifact(url);
+      if (!artifact) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Could not retrieve this Instagram media. Meta enforces login requirements on cloud IPs. Try running the app locally where yt-dlp/gallery-dl executes directly, or set INSTAGRAM_COOKIE in environment variables.",
+          },
+          { status: 404 }
+        );
+      }
+
+      let sizeStr = "High Quality";
+      try {
+        const head = await fetch(artifact.url, { method: "HEAD" });
+        const len = head.headers.get("content-length");
+        if (len) sizeStr = formatBytes(parseInt(len, 10));
+      } catch {}
+
+      const proxyDownloadUrl = `/api/proxy?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(
+        artifact.name
+      )}`;
+
+      return NextResponse.json({
+        success: true,
+        message: `Successfully retrieved Instagram ${artifact.mediaType}!`,
+        files: [
+          {
+            name: artifact.name,
+            url: artifact.url,
+            downloadUrl: proxyDownloadUrl,
+            size: sizeStr,
+            mediaType: artifact.mediaType,
+          },
+        ],
+      });
+    }
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Internal server error" },

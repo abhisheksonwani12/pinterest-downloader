@@ -1,6 +1,6 @@
-# PinDrop — Pinterest Artifact Downloader & Web Interface
+# PinDrop — Media Downloader (Pinterest & Instagram)
 
-A modern, minimal tool to download full-resolution images and videos from Pinterest pin links, boards, and short links (`pin.it`).
+A modern, minimal tool to download full-resolution images and videos from Pinterest pin links, boards, short links (`pin.it`), and Instagram Reels and Posts.
 
 Includes both a Next.js chat interface and standalone Python CLI tools.
 
@@ -8,11 +8,10 @@ Includes both a Next.js chat interface and standalone Python CLI tools.
 
 ## ⚡ Features
 
-- **Next.js Web Interface**: Minimalist dark-themed chat app to paste links and download media.
-- **Embedded Media Previews**: Video player for MP4 video pins and inline previews for high-resolution images.
-- **Original Quality**: Fetches original uncompressed images directly from Pinterest CDN.
-- **No API Token Required**: Built on `gallery-dl` with automatic request throttling and rate-limit backoff.
-- **Pinterest API v5 Script**: Also includes an official API-based downloader for boards.
+- **Multi-Platform Support**: Paste Pinterest pins/boards or Instagram Reels/Posts directly into the chat interface.
+- **Embedded Media Previews**: Video player for MP4 video pins / reels and inline previews for high-resolution images.
+- **Original Quality**: Fetches original uncompressed media directly from source CDNs.
+- **Vercel Serverless Ready**: Uses lightweight API extractors and streaming proxy endpoints.
 - **History Drawer**: Keeps track of all downloaded artifacts with one-click saves.
 
 ---
