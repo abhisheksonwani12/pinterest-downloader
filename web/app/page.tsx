@@ -44,20 +44,56 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
-  const fetchHistory = async () => {
+  const STORAGE_KEY = "pindrop_history";
+
+  const loadHistory = () => {
     try {
-      const res = await fetch("/api/history");
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(data);
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setHistory(JSON.parse(saved));
       }
     } catch (e) {
-      console.error("Failed to load history", e);
+      console.error("Failed to load history from localStorage", e);
+    }
+  };
+
+  const saveToHistory = (newFiles: MediaFile[]) => {
+    try {
+      setHistory((prev) => {
+        const existingUrls = new Set(prev.map((f) => f.url));
+        const toAdd = newFiles.filter((f) => !existingUrls.has(f.url));
+        const updated = [...toAdd, ...prev].slice(0, 50);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    } catch (e) {
+      console.error("Failed to save history to localStorage", e);
+    }
+  };
+
+  const removeHistoryItem = (nameToRemove: string) => {
+    try {
+      setHistory((prev) => {
+        const updated = prev.filter((item) => item.name !== nameToRemove);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    } catch (e) {
+      console.error("Failed to remove history item", e);
+    }
+  };
+
+  const clearHistory = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      setHistory([]);
+    } catch (e) {
+      console.error("Failed to clear history", e);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
+    loadHistory();
   }, []);
 
   const handleDownload = async (urlToSend?: string) => {
@@ -107,7 +143,9 @@ export default function Home() {
         })
       );
 
-      fetchHistory();
+      if (data.success && data.files && data.files.length > 0) {
+        saveToHistory(data.files);
+      }
     } catch (err: any) {
       setMessages((prev) =>
         prev.map((msg) =>
@@ -341,7 +379,7 @@ export default function Home() {
             </button>
           </form>
           <p className="text-center text-[11px] text-gray-500 mt-2">
-            Press Enter to submit • Media saves to <code className="text-gray-400">Downloaded_Pins/</code>
+            Press Enter to submit • Media saved to your browser history
           </p>
         </div>
       </footer>
@@ -354,42 +392,84 @@ export default function Home() {
         />
       )}
       <aside
-        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-[#12141c] border-l border-white/10 z-50 flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 w-84 max-w-[88vw] h-full bg-[#12141c] border-l border-white/10 z-50 flex flex-col transition-transform duration-300 ease-out ${
           isDrawerOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-gray-100">Downloaded Pins</h2>
-          <button
-            onClick={() => setIsDrawerOpen(false)}
-            className="text-gray-400 hover:text-gray-200 text-lg p-1 cursor-pointer"
-            aria-label="Close drawer"
-          >
-            &times;
-          </button>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-gray-100">Saved Media</h2>
+            <span className="text-[10px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-full font-mono">
+              {history.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {history.length > 0 && (
+              <button
+                onClick={clearHistory}
+                className="text-[11px] text-gray-400 hover:text-red-400 transition cursor-pointer px-1.5 py-0.5"
+              >
+                Clear all
+              </button>
+            )}
+            <button
+              onClick={() => setIsDrawerOpen(false)}
+              className="text-gray-400 hover:text-gray-200 text-lg p-1 cursor-pointer leading-none"
+              aria-label="Close drawer"
+            >
+              &times;
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5">
           {history.length === 0 ? (
-            <div className="text-center py-10 text-xs text-gray-500">No downloads yet.</div>
+            <div className="text-center py-12 text-xs text-gray-500">
+              No saved downloads yet.<br />Artifacts you download will show up here.
+            </div>
           ) : (
             history.map((item, idx) => (
               <div
                 key={idx}
-                className="bg-[#1a1e29] border border-white/5 rounded-lg p-2.5 flex items-center justify-between gap-2"
+                className="bg-[#1a1e29] border border-white/5 rounded-lg p-3 flex flex-col gap-2 group hover:border-white/10 transition"
               >
-                <div className="min-w-0">
-                  <div className="text-xs font-medium text-gray-200 truncate">{item.name}</div>
-                  <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    {item.size} • {item.mediaType.toUpperCase()}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium text-gray-200 truncate" title={item.name}>
+                      {item.name}
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-2">
+                      <span className="px-1.5 py-0.2 bg-white/5 rounded text-[9px]">
+                        {item.mediaType.toUpperCase()}
+                      </span>
+                      <span>{item.size}</span>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => removeHistoryItem(item.name)}
+                    className="text-gray-500 hover:text-red-400 p-0.5 transition cursor-pointer text-sm leading-none"
+                    title="Remove from history"
+                    aria-label={`Remove ${item.name} from history`}
+                  >
+                    &times;
+                  </button>
                 </div>
-                <a
-                  href={item.url}
-                  download={item.name}
-                  className="px-2.5 py-1 bg-[#e60023] hover:bg-[#ff1a3c] text-white text-[11px] font-medium rounded transition flex-shrink-0"
-                >
-                  Save
-                </a>
+                <div className="flex items-center gap-2 pt-1 border-t border-white/5">
+                  <a
+                    href={item.downloadUrl || item.url}
+                    download={item.name}
+                    className="flex-1 text-center py-1 bg-[#e60023] hover:bg-[#ff1a3c] text-white text-[11px] font-medium rounded transition"
+                  >
+                    Save
+                  </a>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] rounded transition"
+                  >
+                    Open
+                  </a>
+                </div>
               </div>
             ))
           )}
