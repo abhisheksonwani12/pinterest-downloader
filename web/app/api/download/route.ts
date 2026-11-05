@@ -379,35 +379,98 @@ async function extractYouTubeArtifact(url: string) {
     }
   }
 
-  // 2. RapidAPI Cloud Resolver (when RAPIDAPI_KEY or YOUTUBE_API_KEY is configured)
-  const apiKey = process.env.RAPIDAPI_KEY || process.env.YOUTUBE_API_KEY;
+  // 2. RapidAPI Cloud Resolver (when RAPIDAPI_KEY, RAPID_API_KEY or YOUTUBE_API_KEY is configured)
+  const apiKey =
+    process.env.RAPIDAPI_KEY ||
+    process.env.RAPID_API_KEY ||
+    process.env.YOUTUBE_API_KEY ||
+    process.env.YOUTUBE_KEY;
+  const host = (
+    process.env.RAPIDAPI_HOST ||
+    process.env.YOUTUBE_API_HOST ||
+    "yt-api.p.rapidapi.com"
+  ).trim();
+
   if (apiKey) {
     try {
-      const res = await fetch(`https://yt-api.p.rapidapi.com/dl?id=${videoId}`, {
+      const res = await fetch(`https://${host}/dl?id=${videoId}`, {
         headers: {
-          "x-rapidapi-host": "yt-api.p.rapidapi.com",
+          "x-rapidapi-host": host,
           "x-rapidapi-key": apiKey.trim(),
         },
       });
-      if (res.ok) {
-        const json = await res.json();
-        const formats = json.formats || json.streamingData?.formats || [];
-        const prog = formats.filter(
-          (f: any) => f.url && f.mimeType?.includes("video/mp4")
-        );
-        const chosen = prog.length > 0 ? prog[prog.length - 1] : formats.find((f: any) => f.url);
-        if (chosen?.url) {
-          const cleanTitle = (json.title || `youtube_${videoId}`)
-            .replace(/[^a-zA-Z0-9_-]/g, "_")
-            .slice(0, 50);
-          return {
-            name: `${cleanTitle}.mp4`,
-            url: chosen.url,
-            mediaType: "video" as const,
-          };
+
+      if (!res.ok) {
+        const errText = await res.text();
+        let parsedMsg = "";
+        try {
+          const errJson = JSON.parse(errText);
+          parsedMsg = errJson.message || errJson.error || errText;
+        } catch {
+          parsedMsg = errText;
         }
+
+        if (res.status === 403) {
+          throw new Error(
+            `RapidAPI (${host}) 403 Forbidden: "${parsedMsg}". Make sure you clicked "Subscribe to Test" (Free Plan) for this API on RapidAPI.`
+          );
+        }
+        if (res.status === 401) {
+          throw new Error(
+            `RapidAPI (${host}) 401 Unauthorized: "${parsedMsg}". Please verify your API key value in Vercel.`
+          );
+        }
+        throw new Error(
+          `RapidAPI (${host}) returned HTTP ${res.status}: ${parsedMsg.slice(0, 150)}`
+        );
       }
+
+      const json = await res.json();
+      const formats = json.formats || json.streamingData?.formats || json.videos || [];
+      const prog = Array.isArray(formats)
+        ? formats.filter(
+            (f: any) =>
+              f?.url &&
+              (f.mimeType?.includes("video/mp4") ||
+                f.ext === "mp4" ||
+                (f.vcodec && !f.vcodec.includes("none")))
+          )
+        : [];
+
+      const chosen =
+        (prog.length > 0
+          ? prog[prog.length - 1]
+          : Array.isArray(formats)
+          ? formats.find((f: any) => f?.url)
+          : null) || null;
+
+      const directUrl =
+        chosen?.url ||
+        json.link ||
+        json.downloadUrl ||
+        json.url ||
+        json.data?.url ||
+        json.data?.link;
+
+      if (directUrl) {
+        const cleanTitle = (json.title || `youtube_${videoId}`)
+          .replace(/[^a-zA-Z0-9_-]/g, "_")
+          .slice(0, 50);
+        return {
+          name: `${cleanTitle}.mp4`,
+          url: directUrl,
+          mediaType: "video" as const,
+        };
+      }
+
+      throw new Error(
+        `RapidAPI (${host}) succeeded, but no downloadable MP4 link was found in the response.`
+      );
     } catch (err: any) {
+      // Re-throw descriptive RapidAPI errors so the user sees the real cause
+      if (err.message?.startsWith("RapidAPI")) {
+        throw err;
+      }
       console.warn("RapidAPI execution error:", err.message);
     }
   }
@@ -427,7 +490,7 @@ async function extractYouTubeArtifact(url: string) {
   } catch {}
 
   throw new Error(
-    `To download "${title}" on Vercel, set RAPIDAPI_KEY in environment variables, or run the app locally with "npm run dev".`
+    `RAPIDAPI_KEY is not active on this deployment for "${title}". In Vercel, adding environment variables only takes effect after a new deployment. Click "Redeploy" in your Vercel Deployments dashboard or push a commit to apply.`
   );
 }
 
