@@ -242,10 +242,33 @@ async function extractInstagramArtifact(url: string) {
 
     if (process.env.INSTAGRAM_COOKIE) {
       const rawCookie = process.env.INSTAGRAM_COOKIE.trim();
-      headers["Cookie"] = rawCookie.includes("sessionid=") ? rawCookie : `sessionid=${rawCookie};`;
+      let cookieHeader = rawCookie.includes("sessionid=") ? rawCookie : `sessionid=${rawCookie};`;
+      if (!cookieHeader.includes("ds_user_id=")) {
+        const match = cookieHeader.match(/sessionid=(\d+)%/);
+        if (match) {
+          cookieHeader += ` ds_user_id=${match[1]};`;
+        }
+      }
+      headers["Cookie"] = cookieHeader;
     }
 
-    const res = await fetch(apiUrl, { headers });
+    const res = await fetch(apiUrl, { headers, redirect: "manual" });
+
+    if (res.status === 404) {
+      throw new Error("This Instagram post or reel does not exist. It may be deleted, expired, or private.");
+    }
+
+    if (res.status === 302 || res.status === 401 || res.status === 403) {
+      if (!process.env.INSTAGRAM_COOKIE) {
+        throw new Error(
+          "Instagram requires a login session on cloud servers. Please add INSTAGRAM_COOKIE to Vercel environment variables."
+        );
+      }
+      throw new Error(
+        "Instagram could not access this post with your session. The post may be deleted or private."
+      );
+    }
+
     if (res.ok) {
       const json = await res.json();
       const item = json.items?.[0];
@@ -264,9 +287,30 @@ async function extractInstagramArtifact(url: string) {
             mediaType: "image" as const,
           };
         }
+        if (item.carousel_media && item.carousel_media.length > 0) {
+          const first = item.carousel_media[0];
+          if (first.video_versions && first.video_versions.length > 0) {
+            return {
+              name: `instagram_${shortcode}.mp4`,
+              url: first.video_versions[0].url,
+              mediaType: "video" as const,
+            };
+          }
+          if (first.image_versions2?.candidates && first.image_versions2.candidates.length > 0) {
+            return {
+              name: `instagram_${shortcode}.jpg`,
+              url: first.image_versions2.candidates[0].url,
+              mediaType: "image" as const,
+            };
+          }
+        }
       }
+      throw new Error("Instagram returned an empty response. The post or reel may have been removed.");
     }
   } catch (err: any) {
+    if (err.message && !err.message.includes("fetch failed")) {
+      throw err;
+    }
     console.warn("Instagram direct API error:", err.message);
   }
 
@@ -342,13 +386,26 @@ export async function POST(req: NextRequest) {
 
     // 2. Handle Instagram
     if (isInstagram) {
-      const artifact = await extractInstagramArtifact(url);
+      let artifact;
+      try {
+        artifact = await extractInstagramArtifact(url);
+      } catch (err: any) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: err.message || "Could not retrieve this Instagram media.",
+          },
+          { status: 400 }
+        );
+      }
+
       if (!artifact) {
         return NextResponse.json(
           {
             success: false,
-            error:
-              "Could not retrieve this Instagram media. Meta enforces login requirements on cloud IPs. Try running the app locally where yt-dlp/gallery-dl executes directly, or set INSTAGRAM_COOKIE in environment variables.",
+            error: process.env.INSTAGRAM_COOKIE
+              ? "Could not find media in this Instagram post. It may be deleted or private."
+              : "Could not retrieve Instagram media. Meta enforces login requirements on cloud IPs. Try setting INSTAGRAM_COOKIE in environment variables.",
           },
           { status: 404 }
         );

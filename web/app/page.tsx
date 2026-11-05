@@ -217,7 +217,7 @@ export default function Home() {
                           📌 Try: Pinterest Video
                         </button>
                         <button
-                          onClick={() => handleDownload("https://www.instagram.com/reel/C8_c89bMu0v/")}
+                          onClick={() => handleDownload("https://www.instagram.com/reel/Chunk8-jurw/")}
                           className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-gray-300 transition cursor-pointer"
                         >
                           📸 Try: Instagram Reel
