@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF2A5F"/>
+      <stop offset="50%" stop-color="#A828DA"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="128" fill="url(#bg)"/>
+
+  <!-- Downward arrow -->
+  <path d="M256 130V300" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"/>
+  <path d="M172 216L256 300L340 216" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Media tray -->
+  <path d="M120 320V340C120 367.614 142.386 390 170 390H342C369.614 390 392 367.614 392 340V320" 
+        stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"/>
+</svg>

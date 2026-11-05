@@ -44,11 +44,11 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
-  const STORAGE_KEY = "pindrop_history";
+  const STORAGE_KEY = "mediadrop_history";
 
   const loadHistory = () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("pindrop_history");
       if (saved) {
         setHistory(JSON.parse(saved));
       }
@@ -86,6 +86,7 @@ export default function Home() {
   const clearHistory = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("pindrop_history");
       setHistory([]);
     } catch (e) {
       console.error("Failed to clear history", e);
@@ -178,20 +179,23 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-[#090a0f] text-[#f3f4f6]">
-      {/* Background ambient red glow */}
-      <div className="fixed top-[-100px] left-1/2 -translate-x-1/2 w-[550px] h-[300px] bg-[radial-gradient(circle,rgba(230,0,35,0.18)_0%,transparent_70%)] pointer-events-none blur-[90px] z-0" />
+      {/* Background ambient glow */}
+      <div className="fixed top-[-100px] left-1/2 -translate-x-1/2 w-[550px] h-[300px] bg-[radial-gradient(circle,rgba(168,40,218,0.2)_0%,rgba(255,42,95,0.1)_40%,transparent_70%)] pointer-events-none blur-[90px] z-0" />
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4 bg-[#090a0f]/80 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#e60023] flex items-center justify-center shadow-[0_0_16px_rgba(230,0,35,0.35)]">
-            <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z" />
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF2A5F] via-[#A828DA] to-[#3B82F6] flex items-center justify-center shadow-[0_0_16px_rgba(168,40,218,0.35)]">
+            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 4v10m0 0l-4-4m4 4l4-4" />
+              <path d="M5 16v1a3 3 0 003 3h8a3 3 0 003-3v-1" />
             </svg>
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight">PinDrop</h1>
-            <p className="text-[11px] text-gray-400">Media Downloader (Pinterest & Instagram)</p>
+            <h1 className="text-sm font-bold tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
+              MediaDrop
+            </h1>
+            <p className="text-[11px] text-gray-400">Media Downloader (Pinterest &amp; Instagram)</p>
           </div>
         </div>
 
@@ -223,9 +227,10 @@ export default function Home() {
               }`}
             >
               {msg.role === "bot" && (
-                <div className="w-8 h-8 rounded-full bg-[#e60023] flex items-center justify-center flex-shrink-0 shadow-[0_0_12px_rgba(230,0,35,0.3)]">
-                  <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.42 7.63 11.1-.11-.94-.2-2.39.04-3.42.22-.94 1.43-6.07 1.43-6.07s-.36-.73-.36-1.81c0-1.7 1-2.97 2.25-2.97 1.06 0 1.57.8 1.57 1.75 0 1.07-.68 2.67-1.04 4.15-.29 1.25.63 2.27 1.86 2.27 2.24 0 3.96-2.36 3.96-5.77 0-3.02-2.17-5.13-5.27-5.13-3.59 0-5.7 2.69-5.7 5.47 0 1.08.42 2.25.94 2.88.1.13.12.24.09.37-.1.4-.32 1.3-.36 1.48-.06.24-.19.29-.44.18-1.64-.76-2.67-3.16-2.67-5.08 0-4.14 3.01-7.94 8.68-7.94 4.56 0 8.1 3.25 8.1 7.59 0 4.53-2.86 8.17-6.82 8.17-1.33 0-2.58-.69-3.01-1.51l-.82 3.12c-.3 1.15-1.11 2.59-1.65 3.47 1.25.38 2.58.59 3.96.59 6.63 0 12-5.37 12-12S18.63 0 12 0z" />
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF2A5F] via-[#A828DA] to-[#3B82F6] flex items-center justify-center flex-shrink-0 shadow-[0_0_12px_rgba(168,40,218,0.3)]">
+                  <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 4v10m0 0l-4-4m4 4l4-4" />
+                    <path d="M5 16v1a3 3 0 003 3h8a3 3 0 003-3v-1" />
                   </svg>
                 </div>
               )}
@@ -239,7 +244,7 @@ export default function Home() {
               >
                 {msg.loading ? (
                   <div className="flex items-center gap-2.5 text-gray-400">
-                    <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-[#e60023] rounded-full animate-spin" />
+                    <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-[#A828DA] rounded-full animate-spin" />
                     <span>Fetching original artifact...</span>
                   </div>
                 ) : (
@@ -312,7 +317,7 @@ export default function Home() {
                                 <a
                                   href={file.downloadUrl || file.url}
                                   download={file.name}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#e60023] hover:bg-[#ff1a3c] text-white text-xs font-semibold rounded-lg transition"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#FF2A5F] to-[#A828DA] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-[0_2px_10px_rgba(168,40,218,0.25)] transition"
                                 >
                                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3" />
@@ -350,14 +355,14 @@ export default function Home() {
               e.preventDefault();
               handleDownload();
             }}
-            className="flex items-center gap-2 bg-[#12141c] border border-white/10 focus-within:border-[#e60023] focus-within:ring-2 focus-within:ring-[#e60023]/25 rounded-2xl px-3 py-1.5 transition"
+            className="flex items-center gap-2 bg-[#12141c] border border-white/10 focus-within:border-[#A828DA] focus-within:ring-2 focus-within:ring-[#A828DA]/25 rounded-2xl px-3 py-1.5 transition"
           >
-            <label htmlFor="pinterest-url-input" className="sr-only">
+            <label htmlFor="media-url-input" className="sr-only">
               Media URL
             </label>
             <input
               ref={inputRef}
-              id="pinterest-url-input"
+              id="media-url-input"
               type="text"
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}
@@ -371,7 +376,7 @@ export default function Home() {
               type="submit"
               disabled={!inputUrl.trim() || isLoading}
               aria-label="Send link"
-              className="w-8 h-8 rounded-full bg-[#e60023] hover:bg-[#ff1a3c] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white transition flex-shrink-0 cursor-pointer"
+              className="w-8 h-8 rounded-full bg-gradient-to-r from-[#FF2A5F] to-[#A828DA] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white transition flex-shrink-0 cursor-pointer shadow-[0_2px_8px_rgba(168,40,218,0.25)]"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -457,7 +462,7 @@ export default function Home() {
                   <a
                     href={item.downloadUrl || item.url}
                     download={item.name}
-                    className="flex-1 text-center py-1 bg-[#e60023] hover:bg-[#ff1a3c] text-white text-[11px] font-medium rounded transition"
+                    className="flex-1 text-center py-1 bg-gradient-to-r from-[#FF2A5F] to-[#A828DA] hover:opacity-90 text-white text-[11px] font-medium rounded transition"
                   >
                     Save
                   </a>

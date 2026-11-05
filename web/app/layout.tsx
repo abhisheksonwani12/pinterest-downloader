@@ -13,9 +13,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PinDrop | Pinterest & Instagram Downloader",
+  title: "MediaDrop | Pinterest & Instagram Downloader",
   description:
     "Fast, high-resolution media downloader for Pinterest pins, videos, boards, and Instagram reels & posts.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180" }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
