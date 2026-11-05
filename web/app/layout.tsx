@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MediaDrop | Pinterest & Instagram Downloader",
+  title: "MediaDrop | Pinterest, Instagram & YouTube Downloader",
   description:
-    "Fast, high-resolution media downloader for Pinterest pins, videos, boards, and Instagram reels & posts.",
+    "Fast, high-resolution media downloader for Pinterest pins & videos, Instagram reels & posts, and YouTube videos & shorts.",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },

@@ -25,7 +25,7 @@ export default function Home() {
       id: "intro",
       role: "bot",
       content:
-        "Hey! 👋 Paste any Pinterest link (pin, video, board) or Instagram link (Reel, Post, Share link) below, and I'll fetch the original artifact for you.",
+        "Hey! 👋 Paste any Pinterest, Instagram, or YouTube link below, and I'll fetch the original artifact for you.",
     },
   ]);
   const [inputUrl, setInputUrl] = useState("");
@@ -195,7 +195,7 @@ export default function Home() {
             <h1 className="text-sm font-bold tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
               MediaDrop
             </h1>
-            <p className="text-[11px] text-gray-400">Media Downloader (Pinterest &amp; Instagram)</p>
+            <p className="text-[11px] text-gray-400">Media Downloader (Pinterest, Instagram &amp; YouTube)</p>
           </div>
         </div>
 
@@ -264,6 +264,12 @@ export default function Home() {
                           className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-gray-300 transition cursor-pointer"
                         >
                           📸 Try: Instagram Reel
+                        </button>
+                        <button
+                          onClick={() => handleDownload("https://www.youtube.com/watch?v=jNQXAC9IVRw")}
+                          className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-gray-300 transition cursor-pointer"
+                        >
+                          🎬 Try: YouTube Video
                         </button>
                       </div>
                     )}
@@ -367,7 +373,7 @@ export default function Home() {
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Paste Pinterest (pin.it) or Instagram (reel/post) link..."
+              placeholder="Paste Pinterest (pin.it), Instagram, or YouTube link..."
               className="flex-1 bg-transparent border-none outline-none text-sm text-gray-100 placeholder:text-gray-500 px-2 py-1.5"
               autoComplete="off"
               disabled={isLoading}

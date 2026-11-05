@@ -318,6 +318,87 @@ async function extractInstagramArtifact(url: string) {
 }
 
 // ---------------------------------------------------------
+// YOUTUBE EXTRACTION
+// ---------------------------------------------------------
+
+function parseYouTubeVideoId(url: string): string | null {
+  const match = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([a-zA-Z0-9_-]{11})/i
+  );
+  return match ? match[1] : null;
+}
+
+async function extractYouTubeArtifact(url: string) {
+  const videoId = parseYouTubeVideoId(url);
+  if (!videoId) {
+    throw new Error("Could not parse YouTube video ID from URL.");
+  }
+
+  // 1. Check if local CLI tool (yt-dlp) is installed
+  const tools = [
+    "/opt/homebrew/bin/yt-dlp",
+    "/usr/local/bin/yt-dlp",
+    "/Library/Frameworks/Python.framework/Versions/3.14/bin/yt-dlp",
+    "yt-dlp",
+  ];
+
+  for (const bin of tools) {
+    try {
+      if (fs.existsSync(/*turbopackIgnore: true*/ bin) || bin === "yt-dlp") {
+        const { stdout } = await execFileAsync(
+          bin,
+          ["--dump-single-json", "--no-warnings", url],
+          { timeout: 30000 }
+        );
+        const info = JSON.parse(stdout);
+        const formats = info.formats || [];
+
+        // Progressive formats (both video and audio) are best for direct download
+        const prog = formats.filter(
+          (f: any) => f.url && f.vcodec && f.vcodec !== "none" && f.acodec && f.acodec !== "none"
+        );
+        const videoOnly = formats.filter(
+          (f: any) => f.url && f.vcodec && f.vcodec !== "none"
+        );
+        const chosen = prog.length > 0 ? prog[prog.length - 1] : videoOnly[videoOnly.length - 1];
+
+        const directUrl = chosen?.url || info.url;
+        if (directUrl) {
+          const cleanTitle = (info.title || `youtube_${videoId}`)
+            .replace(/[^a-zA-Z0-9_-]/g, "_")
+            .slice(0, 50);
+          return {
+            name: `${cleanTitle}.mp4`,
+            url: directUrl,
+            mediaType: "video" as const,
+          };
+        }
+      }
+    } catch (err: any) {
+      console.warn("yt-dlp local execution error:", err.message);
+    }
+  }
+
+  // 2. Fallback when running in cloud serverless environment
+  let title = `youtube_${videoId}`;
+  try {
+    const oembedRes = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+    );
+    if (oembedRes.ok) {
+      const oembed = await oembedRes.json();
+      if (oembed.title) {
+        title = oembed.title;
+      }
+    }
+  } catch {}
+
+  throw new Error(
+    `YouTube enforces bot-detection on cloud servers. To download "${title}", run the app locally with "npm run dev" where yt-dlp executes directly.`
+  );
+}
+
+// ---------------------------------------------------------
 // POST HANDLER
 // ---------------------------------------------------------
 
@@ -332,10 +413,11 @@ export async function POST(req: NextRequest) {
 
     const isPinterest = /(pinterest\.[a-z.]+|pin\.it)/i.test(url);
     const isInstagram = /(instagram\.com|instagr\.am)/i.test(url);
+    const isYouTube = /(?:youtube\.com\/(?:watch\?v=|watch\?.+&v=|shorts\/|embed\/|v\/)|youtu\.be\/)/i.test(url);
 
-    if (!isPinterest && !isInstagram) {
+    if (!isPinterest && !isInstagram && !isYouTube) {
       return NextResponse.json(
-        { success: false, error: "Please enter a valid Pinterest or Instagram link." },
+        { success: false, error: "Please enter a valid Pinterest, Instagram, or YouTube link." },
         { status: 400 }
       );
     }
@@ -425,6 +507,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         message: `Successfully retrieved Instagram ${artifact.mediaType}!`,
+        files: [
+          {
+            name: artifact.name,
+            url: artifact.url,
+            downloadUrl: proxyDownloadUrl,
+            size: sizeStr,
+            mediaType: artifact.mediaType,
+          },
+        ],
+      });
+    }
+
+    // 3. Handle YouTube
+    if (isYouTube) {
+      let artifact;
+      try {
+        artifact = await extractYouTubeArtifact(url);
+      } catch (err: any) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: err.message || "Could not retrieve this YouTube video.",
+          },
+          { status: 400 }
+        );
+      }
+
+      let sizeStr = "High Quality";
+      try {
+        const head = await fetch(artifact.url, { method: "HEAD" });
+        const len = head.headers.get("content-length");
+        if (len) sizeStr = formatBytes(parseInt(len, 10));
+      } catch {}
+
+      const proxyDownloadUrl = `/api/proxy?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(
+        artifact.name
+      )}`;
+
+      return NextResponse.json({
+        success: true,
+        message: `Successfully retrieved YouTube video!`,
         files: [
           {
             name: artifact.name,
