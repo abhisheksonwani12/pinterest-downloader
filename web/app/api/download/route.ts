@@ -379,7 +379,40 @@ async function extractYouTubeArtifact(url: string) {
     }
   }
 
-  // 2. Fallback when running in cloud serverless environment
+  // 2. RapidAPI Cloud Resolver (when RAPIDAPI_KEY or YOUTUBE_API_KEY is configured)
+  const apiKey = process.env.RAPIDAPI_KEY || process.env.YOUTUBE_API_KEY;
+  if (apiKey) {
+    try {
+      const res = await fetch(`https://yt-api.p.rapidapi.com/dl?id=${videoId}`, {
+        headers: {
+          "x-rapidapi-host": "yt-api.p.rapidapi.com",
+          "x-rapidapi-key": apiKey.trim(),
+        },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const formats = json.formats || json.streamingData?.formats || [];
+        const prog = formats.filter(
+          (f: any) => f.url && f.mimeType?.includes("video/mp4")
+        );
+        const chosen = prog.length > 0 ? prog[prog.length - 1] : formats.find((f: any) => f.url);
+        if (chosen?.url) {
+          const cleanTitle = (json.title || `youtube_${videoId}`)
+            .replace(/[^a-zA-Z0-9_-]/g, "_")
+            .slice(0, 50);
+          return {
+            name: `${cleanTitle}.mp4`,
+            url: chosen.url,
+            mediaType: "video" as const,
+          };
+        }
+      }
+    } catch (err: any) {
+      console.warn("RapidAPI execution error:", err.message);
+    }
+  }
+
+  // 3. Fallback when running in cloud serverless environment
   let title = `youtube_${videoId}`;
   try {
     const oembedRes = await fetch(
@@ -394,7 +427,7 @@ async function extractYouTubeArtifact(url: string) {
   } catch {}
 
   throw new Error(
-    `YouTube enforces bot-detection on cloud servers. To download "${title}", run the app locally with "npm run dev" where yt-dlp executes directly.`
+    `To download "${title}" on Vercel, set RAPIDAPI_KEY in environment variables, or run the app locally with "npm run dev".`
   );
 }
 
